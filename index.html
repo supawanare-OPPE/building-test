@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ฐานข้อมูลอาคาร มหาวิทยาลัยมหิดล ศาลายา">
+  <title>ฐานข้อมูลอาคาร มหาวิทยาลัยมหิดล ศาลายา</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>ฐานข้อมูลอาคาร มหาวิทยาลัยมหิดล ศาลายา</h1>
+        <p>Building Database • ค้นหา ตรวจสอบ และปรับปรุงข้อมูลจาก Google Sheet</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-light" onclick="refreshData()">↻ อัปเดตข้อมูล</button>
+        <button class="btn btn-light" onclick="exportCsv()">⇩ CSV</button>
+        <button id="unlockBtn" class="btn btn-light" onclick="unlockEditing()">🔐 ปลดล็อกแก้ไข</button>
+        <button id="lockBtn" class="btn btn-light" style="display:none" onclick="lockEditing()">🔒 ล็อก</button>
+        <button id="addBtn" class="btn btn-primary" style="display:none" onclick="openAdd()">＋ เพิ่มอาคาร</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="statusline">
+      <div class="sync"><span id="statusDot" class="dot"></span><span id="syncText">กำลังเชื่อมต่อฐานข้อมูล...</span></div>
+      <div id="resultHint"></div>
+    </div>
+
+    <section class="cards">
+      <div class="card kpi"><div class="label">อาคารทั้งหมด</div><div id="kpiBuildings" class="value">—</div><div class="sub">รายการในฐานข้อมูล</div></div>
+      <div class="card kpi"><div class="label">พื้นที่อาคารรวม</div><div id="kpiArea" class="value">—</div><div class="sub">ตารางเมตร</div></div>
+      <div class="card kpi"><div class="label">อาคารที่ต้องตรวจสอบ</div><div id="kpiInspect" class="value">—</div><div class="sub">ตามข้อมูลมาตรา 32 ทวิ / กฎกระทรวงฯ</div></div>
+      <div class="card kpi"><div class="label">มูลค่าก่อสร้างรวมที่มีข้อมูล</div><div id="kpiBudget" class="value">—</div><div class="sub">บาท</div></div>
+    </section>
+
+    <section class="grid-two">
+      <div class="card panel">
+        <div class="panel-title"><h2>ค้นหาและกรองข้อมูล</h2><button class="btn btn-white btn-sm" onclick="resetFilters()">ล้างตัวกรอง</button></div>
+        <div class="filters">
+          <div class="search"><input id="searchInput" type="search" placeholder="ค้นหาชื่ออาคาร รหัส หน่วยงาน ผู้ออกแบบ ผู้รับเหมา..." oninput="applyFilters()"></div>
+          <select id="ownerFilter" onchange="applyFilters()"><option value="">ทุกส่วนงาน</option></select>
+          <select id="masterFilter" onchange="applyFilters()"><option value="">ทุกประเภทตามผังแม่บท</option></select>
+          <select id="legalFilter" onchange="applyFilters()"><option value="">ทุกประเภทตามกฎหมาย</option></select>
+          <select id="inspectFilter" onchange="applyFilters()"><option value="">สถานะตรวจสอบทั้งหมด</option><option value="yes">ต้องตรวจสอบ</option><option value="no">ไม่เข้าข่าย</option></select>
+        </div>
+        <div id="readonlyNote" class="readonly-note show">โหมดดูข้อมูล • หากต้องการเพิ่มหรือแก้ไข ให้กด “ปลดล็อกแก้ไข” และใส่ PIN ผู้ดูแลระบบ</div>
+      </div>
+      <div class="card panel">
+        <div class="panel-title"><h2>อาคารตามประเภทผังแม่บท</h2><span id="categoryTotal" class="muted"></span></div>
+        <div id="masterChart" class="chart-list"></div>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-tools">
+        <div><strong>รายการอาคาร</strong> <span id="tableCount" class="muted"></span></div>
+        <div class="muted">คลิก “ดูรายละเอียด” เพื่อดูข้อมูลครบทุกฟิลด์</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>อาคาร</th><th>ส่วนงานเจ้าของ/ผู้ดูแล</th><th class="num">ชั้น</th><th class="num">พื้นที่ (ตรม.)</th><th class="num">เปิดใช้ (พ.ศ.)</th><th>ประเภทตามผังแม่บท</th><th>ประเภทตามกฎหมาย</th><th>ตรวจสอบอาคาร</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty" style="display:none">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</div>
+      </div>
+      <div id="pager" class="pager"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal" onclick="backdropClose(event)">
+    <div class="modal-card">
+      <div class="modal-head"><h3 id="modalTitle">รายละเอียดอาคาร</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+      <div class="modal-body">
+        <form id="buildingForm" onsubmit="event.preventDefault(); saveCurrent();">
+          <input type="hidden" id="fRow">
+          <div class="form-grid">
+            <div class="field"><label>ชื่ออาคาร *</label><input id="fName" required></div>
+            <div class="field"><label>รหัสอาคาร</label><input id="fCode"></div>
+            <div class="field full"><label>ส่วนงานเจ้าของอาคาร/ผู้ดูแล</label><input id="fOwner" list="ownerList"><datalist id="ownerList"></datalist></div>
+            <div class="field"><label>จำนวนชั้น</label><input id="fFloors" type="number" min="0" step="1"></div>
+            <div class="field"><label>ความสูง (ม.)</label><input id="fHeight" type="number" min="0" step="0.01"></div>
+            <div class="field"><label>พื้นที่อาคาร (ตรม.)</label><input id="fArea" type="number" min="0" step="0.01"></div>
+            <div class="field"><label>ปีที่เปิดใช้งาน (พ.ศ.)</label><input id="fYear" type="number" min="2400" max="2800" step="1"></div>
+            <div class="field"><label>ผู้ออกแบบ</label><input id="fDesigner"></div>
+            <div class="field"><label>ผู้รับเหมาก่อสร้าง</label><input id="fContractor"></div>
+            <div class="field"><label>มูลค่างานก่อสร้าง (บาท)</label><input id="fBudget" type="number" min="0" step="0.01"></div>
+            <div class="field"><label>ประเภทอาคารตามผังแม่บท</label><input id="fMaster" list="masterList"><datalist id="masterList"></datalist></div>
+            <div class="field full"><label>ประเภทอาคารตามกฎหมาย</label><textarea id="fLegal"></textarea></div>
+            <div class="field full"><label>เข้าข่ายอาคารที่ต้องตรวจสอบหรือไม่</label><div class="toggle-row"><input id="fInspect" type="checkbox"><span>เข้าข่ายมาตรา 32 ทวิ / กฎกระทรวงกำหนดประเภทอาคารที่ต้องจัดให้มีผู้ตรวจสอบ พ.ศ. 2548</span></div></div>
+            <div class="field full"><label>การปรับปรุงอาคาร</label><textarea id="fRenovation"></textarea></div>
+            <div class="field full"><label>ผู้รับเหมางานปรับปรุง</label><input id="fRenovationContractor"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-foot"><button class="btn btn-white" onclick="closeModal()">ปิด</button><button id="saveBtn" class="btn btn-blue" onclick="saveCurrent()">บันทึกข้อมูล</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <div id="loading" class="loading"><div class="spinner"></div></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
